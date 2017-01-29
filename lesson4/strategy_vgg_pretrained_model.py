@@ -88,8 +88,10 @@ def getFCModelWith0Dropouts(shape):
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2,2), input_shape=shape))
     model.add(Flatten())
     model.add(Dense(4096, activation='relu'))
+    model.add(BatchNormalization())
     model.add(Dropout(0.))
     model.add(Dense(4096, activation='relu'))
+    model.add(BatchNormalization())
     model.add(Dropout(0.))
     model.add(Dense(8, activation='softmax'))
     return model
@@ -117,12 +119,32 @@ def getConvModelFromFullVGGModel(vggModel):
     convolutedModel = Sequential(convolutedLayers)
     return convolutedModel
 
-def getFCModelFromFullVGGModel(vggModel):
+def getFCModelFromFullVGGModel(vggModel, numberOfDense):
     indexOfLastConvolutedLayer = len(vggModel.layers)-(getLastConvolutionLayerIndex(vggModel) +1)
     denseLayers = vggModel.layers[indexOfLastConvolutedLayer+1:]
     outputShapeFromConvModel = vggModel.layers[indexOfLastConvolutedLayer].output_shape
+    model = Sequential()
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2,2), input_shape=outputShapeFromConvModel[1:]))
+    model.add(Flatten())
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(numberOfDense, activation='softmax'))
+    sourceLayers = denseLayers
+    targetLayers = model.layers
+    for sourceLayer,targetLayer in zip(sourceLayers, targetLayers):
+        targetLayer.set_weights(sourceLayer.get_weights())
+        break
     return model
 
+def setFCLayersToTrainable(vggModel):
+    indexOfLastConvolutedLayer = len(vggModel.layers)-(getLastConvolutionLayerIndex(vggModel) +1)
+    denseLayers = vggModel.layers[indexOfLastConvolutedLayer+1:]
+    for idx, layer in  enumerate(denseLayers):
+        layer.trainable = True
+    return indexOfLastConvolutedLayer
+       
 def modifyAnyModelFor8Output(model, shouldBeTrainable):
     model.pop()
     for layer in model.layers: 
